@@ -77,7 +77,7 @@ var (
 		if err == nil {
 			return cl, nil
 		}
-		return metadata.Zone()
+		return metadata.Zone(), nil
 	}
 	instanceTemplateFn = func() (string, error) {
 		it, err := metadata.InstanceAttributeValue("instance-template")
@@ -123,10 +123,10 @@ type (
 
 type gcpEnv struct {
 	sync.Mutex
-	metadata           map[string]string
-	shouldFillMetadata bool
+	metadata map[string]string
 }
 
+var fillMetadata bool
 var gcpEnvOnce sync.Once
 
 // IsGCP returns whether or not the platform for bootstrapping is Google Cloud Platform.
@@ -149,14 +149,14 @@ func NewGCP() Environment {
 // location information.
 func (e *gcpEnv) Metadata() map[string]string {
 	gcpEnvOnce.Do(func() {
-		e.shouldFillMetadata = shouldFillMetadata()
+		fillMetadata = shouldFillMetadata()
 	})
 
 	md := map[string]string{}
 	if e == nil {
 		return md
 	}
-	if GCPMetadata == "" && !e.shouldFillMetadata {
+	if GCPMetadata == "" && !fillMetadata {
 		return md
 	}
 
@@ -180,7 +180,7 @@ func (e *gcpEnv) Metadata() map[string]string {
 		md[GCPCluster] = envCN
 	}
 
-	if e.shouldFillMetadata {
+	if fillMetadata {
 		// suppliers is an array of functions that supply the metadata for missing properties
 		var suppliers []metadataSupplier
 		if _, found := md[GCPProject]; !found {
@@ -204,7 +204,7 @@ func (e *gcpEnv) Metadata() map[string]string {
 		md[GCPQuotaProject] = GCPQuotaProjectVar
 	}
 	// Exit early now if not on GCE. This allows setting env var when not on GCE.
-	if !e.shouldFillMetadata {
+	if !fillMetadata {
 		e.metadata = md
 		return md
 	}
@@ -286,7 +286,7 @@ func zoneToRegion(z string) (string, error) {
 // Locality returns the GCP-specific region and zone.
 func (e *gcpEnv) Locality() *core.Locality {
 	var l core.Locality
-	if e.shouldFillMetadata {
+	if fillMetadata {
 		z, zerr := metadata.Zone()
 		if zerr != nil {
 			log.Warnf("Error fetching GCP zone: %v", zerr)
